@@ -1,9 +1,9 @@
 
 using BancoCore.Data;
+using BancoCore.Service;
+using BancoCore.Services;
 using Microsoft.EntityFrameworkCore;
-
 var builder = WebApplication.CreateBuilder(args);
-// Add services to the container.
 
 
 builder.Services.AddControllers();
@@ -15,6 +15,10 @@ builder.Services.AddDbContext<BancoDbContext>(options =>
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+//
+builder.Services.AddScoped<IBancoService, BancoService>();
+builder.Services.AddScoped<ITransferenciaService, TransferenciaService>();
+//
 
 var app = builder.Build();
 
@@ -24,7 +28,6 @@ using(var scope = app.Services.CreateScope())
     db.Database.EnsureCreated();
 }
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

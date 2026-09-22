@@ -1,79 +1,48 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using BancoCore.Data;
-using System.Numerics;
+﻿using BancoCore.Models.Request;
+using BancoCore.Service;
+using BancoCore.Services;
+using Microsoft.AspNetCore.Mvc;
 
 namespace BancoCore.Controllers;
-
-public record TransaccionRequest(int num, decimal Monto);
 
 [ApiController]
 [Route("api/[controller]")]
 public class CuentasController : ControllerBase
 {
-    private readonly BancoDbContext _context;
+    private readonly IBancoService _context;
 
-    public CuentasController(BancoDbContext context)
+    public CuentasController(IBancoService context)
     {
         _context = context;
     }
 
-    [HttpGet("saldo/{id}")]
-    public async Task<IActionResult> ObtenerSaldoPorId(int id)
+    [HttpGet("cuenta/{id}")]
+    public async Task<IActionResult> ObtenerCuenta(int id)
     {
-        var cuenta = await _context.Cuentas.FirstOrDefaultAsync(c => c.Id == id);
-        if (cuenta == null)
-        {
-            return NotFound(new { error = "Cuenta no encontrada." });
-        }
-        return Ok(cuenta);
+        var resultado = await _context.ObtenerCuentaPorId(new ConsultaCuentaRequest(id));
+        if (!resultado.Exito)
+            return NotFound(resultado);
+
+        return Ok(resultado);
     }
 
-    [HttpPost("depositar")]
-    public async Task<IActionResult> Depositar([FromBody] TransaccionRequest request)
+    [HttpPost("deposito")]
+    public async Task<IActionResult> Depositar([FromBody] DepositoRequest request)
     {
-        if (request.Monto <= 0)
-        {
-            return BadRequest(new { error = "El monto a depositar debe ser mayor a 0." });
-        }
-        var cuenta = await _context.Cuentas.FirstOrDefaultAsync(c => c.Id == request.num);
-        if (cuenta == null)
-        {
-            return NotFound(new { error = "Cuenta no encontrada." });
-        }
-        cuenta.Saldo += request.Monto;
-        await _context.SaveChangesAsync();
-        return Ok(new
-        {
-            mensaje = "Depósito procesado con éxito",
-            montoDepositado = request.Monto,
-            saldoDisponible = cuenta.Saldo
-        });
+        var resultado = await _context.Depositar(request);
+        if (!resultado.Exito)
+            return BadRequest(resultado);
+
+        return Ok(resultado);
     }
 
-    [HttpPost("retirar")]
-    public async Task<IActionResult> Retirar([FromBody] TransaccionRequest request)
+    [HttpPost("retiro")]
+    public async Task<IActionResult> Retirar([FromBody] RetiroRequest request)
     {
-        if (request.Monto <= 0)
-        {
-            return BadRequest(new { error = "El monto a retirar debe ser mayor a 0." });
-        }
-        var cuenta = await _context.Cuentas.FirstOrDefaultAsync(c => c.Id == request.num);
-        if (cuenta == null)
-        {
-            return NotFound(new { error = "Cuenta no encontrada." });
-        }
-        if (cuenta.Saldo < request.Monto)
-        {
-            return BadRequest(new { error = "Saldo insuficiente para realizar la transacción." });
-        }
-        cuenta.Saldo -= request.Monto;
-        await _context.SaveChangesAsync();
-        return Ok(new
-        {
-            mensaje = "Retiro procesado con éxito",
-            montoRetirado = request.Monto,
-            saldoDisponible = cuenta.Saldo
-        });
+        var resultado = await _context.Retirar(request);
+        if (!resultado.Exito)
+            return BadRequest(resultado);
+
+        return Ok(resultado);
     }
 }

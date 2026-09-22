@@ -1,77 +1,39 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using BancoCore.Data;
-using BancoCore.Models;
+using BancoCore.Models.Request;
+using BancoCore.Services;
 
 namespace BancoCore.Controllers;
-
-public record TransferenciasRequest(string CuentaOrigen, string CuentaDestino, decimal Monto);
 
 [ApiController]
 [Route("api/[controller]")]
 public class TransferenciasController : ControllerBase
 {
-    private readonly BancoDbContext _context;
+    private readonly ITransferenciaService _transferenciaService;
 
-    public TransferenciasController(BancoDbContext context)
+    public TransferenciasController(ITransferenciaService transferenciaService)
     {
-        _context = context;
+        _transferenciaService = transferenciaService;
     }
 
     [HttpPost("transaccion")]
-    public async Task<IActionResult> Transferir([FromBody] TransferenciasRequest request)
+    public async Task<IActionResult> Transferir([FromBody] TransferenciaRequest request)
     {
-        if (request.Monto <= 0)
-        {
-            return BadRequest(new { error = "El monto a transferir debe ser mayor a 0." });
-        }
-        var cuentaOrigen = await _context.Cuentas.FirstOrDefaultAsync(c => c.NumeroCuenta == request.CuentaOrigen);
-        var cuentaDestino = await _context.Cuentas.FirstOrDefaultAsync(c => c.NumeroCuenta == request.CuentaDestino);
-        if (cuentaOrigen == null || cuentaDestino == null)
-        {
-            return NotFound(new { error = "Una o ambas cuentas no fueron encontradas." });
-        }
-        if (cuentaOrigen.Saldo < request.Monto)
-        {
-            return BadRequest(new { error = "Saldo insuficiente en la cuenta de origen." });
-        }
-        cuentaOrigen.Saldo -= request.Monto;
-        cuentaDestino.Saldo += request.Monto;
+        var resultado = await _transferenciaService.ProcesarTransferenciaAsync(request);
 
-        var transaccion = new Transaccion
-        {
-            NumeroCuentaOrigen = request.CuentaOrigen,
-            NumeroCuentaDestino = request.CuentaDestino,
-            Monto = request.Monto,
-            Fecha = DateTime.UtcNow,
-            Tipo = "Transferencia"
-        };
+        if (!resultado.Exito)
+            return BadRequest(resultado);
 
-        _context.Transaccion.Add(transaccion);
-
-        await _context.SaveChangesAsync();
-        return Ok(new
-        {
-            mensaje = "Transferencia procesada con éxito",
-            montoTransferido = request.Monto,
-            saldoCuentaOrigen = cuentaOrigen.Saldo,
-            saldoCuentaDestino = cuentaDestino.Saldo
-        });
+        return Ok(resultado);
     }
 
     [HttpGet("historial/{cuenta}")]
     public async Task<IActionResult> ObtenerHistorialTransacciones(string cuenta)
     {
-        var cuentaExiste = await _context.Cuentas.AnyAsync(c => c.NumeroCuenta == cuenta);
-        if (!cuentaExiste)
-        {
-            return BadRequest(new { error = "El número de cuenta no existe." });
-        }
-        var transacciones = await _context.Transaccion.Where(t => t.NumeroCuentaOrigen == cuenta || t.NumeroCuentaDestino == cuenta)
-            .OrderByDescending(t => t.Fecha)
-            .ToListAsync();
+        var resultado = await _transferenciaService.ObtenerHistorialAsync(cuenta);
 
-        return Ok(transacciones);
+        if (!resultado.Exito)
+            return NotFound(resultado);
+
+        return Ok(resultado);
     }
-
 }

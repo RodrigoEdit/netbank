@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BancoCore.Migrations
 {
     [DbContext(typeof(BancoDbContext))]
-    [Migration("20260922022119_NuevaBaseDtos")]
+    [Migration("20260922040354_NuevaBaseDtos")]
     partial class NuevaBaseDtos
     {
         /// <inheritdoc />
