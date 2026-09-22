@@ -1,4 +1,6 @@
-﻿namespace BancoCore.Models;
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace BancoCore.Models;
 
 public class Cuenta
 {
@@ -7,4 +9,7 @@ public class Cuenta
     public decimal Saldo { get; set; }
     public string Titular { get; set; } = string.Empty;
     public string Moneda { get; set; } = "PEN";
+
+    [ConcurrencyCheck]
+    public Guid RowVersion { get; set; } = Guid.NewGuid();
 }

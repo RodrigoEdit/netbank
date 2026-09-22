@@ -21,42 +21,63 @@ public class TransferenciaService : ITransferenciaService
         if (request.Monto <= 0)
             return ApiResponse<TransferenciaResultadoResponse>.Error("El monto a transferir debe ser mayor a 0.");
 
-        if (request.CuentaOrigen == request.CuentaDestino)
-            return ApiResponse<TransferenciaResultadoResponse>.Error("La cuenta de origen y destino no pueden ser iguales.");
+        if (string.IsNullOrWhiteSpace(request.CuentaDestino) || request.CuentaOrigen == request.CuentaDestino)
+            return ApiResponse<TransferenciaResultadoResponse>.Error("Las cuentas de origen y destino deben ser válidas y diferentes.");
 
-        var origen = await _context.Cuentas.FirstOrDefaultAsync(c => c.NumeroCuenta == request.CuentaOrigen);
-        var destino = await _context.Cuentas.FirstOrDefaultAsync(c => c.NumeroCuenta == request.CuentaDestino);
+        using var dbTransaction = await _context.Database.BeginTransactionAsync();
 
-        if (origen == null || destino == null)
-            return ApiResponse<TransferenciaResultadoResponse>.Error("Una o ambas cuentas no fueron encontradas.");
-
-        if (origen.Saldo < request.Monto)
-            return ApiResponse<TransferenciaResultadoResponse>.Error("Saldo insuficiente en la cuenta de origen.");
-
-        origen.Saldo -= request.Monto;
-        destino.Saldo += request.Monto;
-
-        var transaccion = new Transaccion
+        try
         {
-            NumeroCuentaOrigen = request.CuentaOrigen,
-            NumeroCuentaDestino = request.CuentaDestino,
-            Monto = request.Monto,
-            Fecha = DateTime.UtcNow,
-            Tipo = "Transferencia"
-        };
+            var origen = await _context.Cuentas.FirstOrDefaultAsync(c => c.NumeroCuenta == request.CuentaOrigen);
+            var destino = await _context.Cuentas.FirstOrDefaultAsync(c => c.NumeroCuenta == request.CuentaDestino);
 
-        _context.Transaccion.Add(transaccion);
-        await _context.SaveChangesAsync();
+            if (origen == null || destino == null)
+                return ApiResponse<TransferenciaResultadoResponse>.Error("Una o ambas cuentas no existen.");
 
-        var resultado = new TransferenciaResultadoResponse(
-            origen.NumeroCuenta,
-            destino.NumeroCuenta,
-            request.Monto,
-            origen.Saldo,
-            destino.Saldo
-        );
+            if (origen.Saldo < request.Monto)
+                return ApiResponse<TransferenciaResultadoResponse>.Error("Saldo insuficiente en la cuenta de origen.");
 
-        return ApiResponse<TransferenciaResultadoResponse>.Ok(resultado, "Transferencia procesada con éxito.");
+            origen.Saldo -= request.Monto;
+            destino.Saldo += request.Monto;
+
+            origen.RowVersion = Guid.NewGuid();
+            destino.RowVersion = Guid.NewGuid();
+
+            var movimiento = new Transaccion
+            {
+                NumeroCuentaOrigen = request.CuentaOrigen,
+                NumeroCuentaDestino = request.CuentaDestino,
+                Monto = request.Monto,
+                Fecha = DateTime.UtcNow,
+                Tipo = "Transferencia"
+            };
+
+            _context.Transaccion.Add(movimiento);
+
+            await _context.SaveChangesAsync();
+
+            await dbTransaction.CommitAsync();
+
+            var resultado = new TransferenciaResultadoResponse(
+                movimiento.NumeroCuentaOrigen,
+                movimiento.NumeroCuentaDestino,
+                movimiento.Monto,
+                origen.Saldo,
+                destino.Saldo
+            );
+
+            return ApiResponse<TransferenciaResultadoResponse>.Ok(resultado, "Transferencia realizada con éxito.");
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            await dbTransaction.RollbackAsync();
+            return ApiResponse<TransferenciaResultadoResponse>.Error("Hubo un conflicto de concurrencia: la cuenta fue modificada por otra operación simultánea. Por favor, intente de nuevo.");
+        }
+        catch (Exception ex)
+        {
+            await dbTransaction.RollbackAsync();
+            return ApiResponse<TransferenciaResultadoResponse>.Error($"Error interno al procesar la transferencia: {ex.Message}");
+        }
     }
     public async Task<ApiResponse<List<HistorialTransaccionResponse>>> ObtenerHistorialAsync(string numeroCuenta)
     {
