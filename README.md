@@ -48,7 +48,7 @@ POST /api/Transferencias/transaccion
 
 1. **Clonar el repositorio:**
    ```bash
-   git clone [https://github.com/tu-usuario/banco-api.git](https://github.com/tu-usuario/banco-api.git)
+   git clone [https://github.com/RodrigoEdit/netbank.git](https://github.com/RodrigoEdit/netbank.git)
    cd banco-api
    ```
 
